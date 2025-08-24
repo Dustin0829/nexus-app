@@ -10,6 +10,8 @@ const queryClient = new QueryClient({
     queries: {
       retry: 1,
       retryDelay: 1000,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      cacheTime: 10 * 60 * 1000, // 10 minutes
     },
     mutations: {
       retry: 1,

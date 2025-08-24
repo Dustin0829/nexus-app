@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, Suspense, useState } from "react"
 import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,9 +8,14 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { WalletConnect } from "@/components/wallet-connect"
 import { useNexusStore } from "@/stores/use-nexus-store"
-import { FileText, Lock, Shield, Zap, LogOut } from "lucide-react"
+import { FileText, Lock, Shield, Zap, LogOut, Loader2 } from "lucide-react"
 import { useAccount, useDisconnect } from "wagmi"
 import { toast } from "@/components/ui/use-toast"
+import { LazyComponent } from "@/components/lazy-components"
+
+// Disable SSR for this page
+export const dynamic = 'force-dynamic'
+export const ssr = false
 
 export default function DashboardPage() {
   const { 
@@ -21,9 +26,20 @@ export default function DashboardPage() {
   
   const { disconnect } = useDisconnect()
   const { address } = useAccount()
+  const [mounted, setMounted] = useState(false)
+
+  // Prevent hydration mismatch
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const handleDisconnect = () => {
     disconnect()
+    // Reset store state
+    const { setConnectedWallet, setWalletAddress, setWalletType } = useNexusStore.getState()
+    setConnectedWallet(false)
+    setWalletAddress("")
+    setWalletType("")
     toast({
       title: "Wallet Disconnected",
       description: "Your wallet has been disconnected",
@@ -32,6 +48,19 @@ export default function DashboardPage() {
 
   const getShortAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`
+  }
+
+  // Prevent hydration mismatch - show loading skeleton
+  if (!mounted) {
+    return (
+      <div className="min-h-screen w-full bg-background flex items-center justify-center p-4">
+        <div className="w-full max-w-md space-y-4">
+          <div className="h-20 bg-muted animate-pulse rounded-lg"></div>
+          <div className="h-10 bg-muted animate-pulse rounded-lg"></div>
+          <div className="h-32 bg-muted animate-pulse rounded-lg"></div>
+        </div>
+      </div>
+    )
   }
 
   // Show only wallet connection when not connected

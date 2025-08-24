@@ -22,11 +22,23 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    // Don't show error boundary for hydration or connection errors
+    if (error.message.includes('Hydration') || 
+        error.message.includes('Connection interrupted') ||
+        error.message.includes('subscription')) {
+      console.warn('Suppressing error:', error.message)
+      return { hasError: false }
+    }
     return { hasError: true, error }
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("ErrorBoundary caught an error:", error, errorInfo)
+    // Don't log hydration or connection errors
+    if (!error.message.includes('Hydration') && 
+        !error.message.includes('Connection interrupted') && 
+        !error.message.includes('subscription')) {
+      console.error("ErrorBoundary caught an error:", error, errorInfo)
+    }
     
     // Handle WalletConnect specific errors
     if (error.message.includes("Connection interrupted") || 

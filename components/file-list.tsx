@@ -23,6 +23,7 @@ import {
 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { useNexusStore } from "@/stores/use-nexus-store"
+import { useLoadingStore } from "@/stores/use-loading-store"
 import { 
   getIrysClient, 
   getFileFromIrys, 
@@ -60,6 +61,7 @@ export function FileList() {
   const publicClient = usePublicClient()
   const { data: walletClient } = useWalletClient()
   const { files, trashFile, setFiles, addFile } = useNexusStore()
+  const { startLoading, stopLoading } = useLoadingStore()
   
   const [searchTerm, setSearchTerm] = useState("")
   const [filterType, setFilterType] = useState("all")
@@ -206,6 +208,7 @@ export function FileList() {
       toast({ title: "Download Failed", description: "File transaction ID not found", variant: "destructive" })
       return
     }
+    startLoading('download-file', `Downloading ${file.name}...`)
     setDownloadingFile(file.id)
     try {
       const response = await getFileFromIrys(file.transactionId)
@@ -245,6 +248,7 @@ export function FileList() {
       toast({ title: "Download Failed", description: "Unable to download this file", variant: "destructive" })
     } finally {
       setDownloadingFile(null)
+      stopLoading('download-file')
     }
   }
 
@@ -296,6 +300,7 @@ export function FileList() {
       return
     }
 
+    startLoading('delete-file', `Deleting ${file.name}...`)
     setDeletingFile(file.id)
     try {
       const irys = await getIrysClient(walletClient, address)
@@ -316,6 +321,7 @@ export function FileList() {
       })
     } finally {
       setDeletingFile(null)
+      stopLoading('delete-file')
     }
   }
 
@@ -496,6 +502,7 @@ export function FileList() {
       return
     }
 
+    startLoading('file-upload', `Uploading ${acceptedFiles.length} file${acceptedFiles.length > 1 ? 's' : ''}...`)
     setIsCheckingBalance(true)
     try {
       const totalSize = acceptedFiles.reduce((sum, file) => sum + file.size, 0)
@@ -550,6 +557,7 @@ export function FileList() {
       })
     } finally {
       setIsCheckingBalance(false)
+      stopLoading('file-upload')
     }
   }
 
@@ -557,6 +565,7 @@ export function FileList() {
     if (!address || !walletClient) return
 
     try {
+      startLoading(`file-upload-${index}`, `Uploading ${file.name}...`)
       // Update progress
       setUploadingFiles(prev => prev.map((f, i) => 
         i === index ? { ...f, progress: 10 } : f
@@ -644,6 +653,8 @@ export function FileList() {
         description: `Failed to upload ${file.name}`,
         variant: "destructive",
       })
+    } finally {
+      stopLoading(`file-upload-${index}`)
     }
   }
 
@@ -658,29 +669,42 @@ export function FileList() {
       return
     }
 
-    // Create a folder with parent folder reference
-    const folderFile = {
-      id: `folder-${Date.now()}`,
-      name: folderName,
-      size: 0,
-      type: 'folder',
-      uploadedAt: new Date().toISOString(),
-      description: "Folder",
-      tags: [],
-      encrypted: false,
-      transactionId: `folder-${Date.now()}`,
-      url: "",
-      parentFolder: selectedFolder ? selectedFolder.id : null
-    }
+    startLoading('create-folder', `Creating folder "${folderName}"...`)
 
-    addFile(folderFile)
-    setFolderName("")
-    setShowCreateFolderDialog(false)
-    
-    toast({
-      title: "📁 Folder Created",
-      description: `Folder "${folderName}" has been created successfully`,
-    })
+    try {
+      // Create a folder with parent folder reference
+      const folderFile = {
+        id: `folder-${Date.now()}`,
+        name: folderName,
+        size: 0,
+        type: 'folder',
+        uploadedAt: new Date().toISOString(),
+        description: "Folder",
+        tags: [],
+        encrypted: false,
+        transactionId: `folder-${Date.now()}`,
+        url: "",
+        parentFolder: selectedFolder ? selectedFolder.id : null
+      }
+
+      addFile(folderFile)
+      setFolderName("")
+      setShowCreateFolderDialog(false)
+      
+      toast({
+        title: "📁 Folder Created",
+        description: `Folder "${folderName}" has been created successfully`,
+      })
+    } catch (error) {
+      console.error("Error creating folder:", error)
+      toast({
+        title: "Folder Creation Failed",
+        description: "Failed to create folder",
+        variant: "destructive",
+      })
+    } finally {
+      stopLoading('create-folder')
+    }
   }
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({

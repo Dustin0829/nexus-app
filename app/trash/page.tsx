@@ -7,6 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Trash2, RotateCcw } from "lucide-react"
 
+// Disable SSR for this page
+export const dynamic = 'force-dynamic'
+export const ssr = false
+
 export default function TrashPage() {
   const { trash, restoreFile, removeTrashedFile } = useNexusStore()
 

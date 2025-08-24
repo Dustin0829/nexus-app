@@ -14,6 +14,7 @@ import { useAccount, usePublicClient, useWalletClient } from "wagmi"
 import { Upload, File, X, AlertCircle, CheckCircle, Loader2, DollarSign } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { useNexusStore } from "@/stores/use-nexus-store"
+import { useLoadingStore } from "@/stores/use-loading-store"
 import { 
   getIrysClient, 
   uploadToIrys, 
@@ -52,6 +53,7 @@ export function FileUpload() {
   const { data: walletClient } = useWalletClient()
   const { addFile, irysBalance, setIrysBalance } = useNexusStore()
   const { files, isSignedIn, setSignedIn, setSiweSignature } = useNexusStore()
+  const { startLoading, stopLoading } = useLoadingStore()
   
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([])
 
@@ -102,6 +104,9 @@ export function FileUpload() {
       })
       return
     }
+
+    // Start global loading
+    startLoading('file-upload', `Uploading ${acceptedFiles.length} file${acceptedFiles.length > 1 ? 's' : ''}...`)
 
     // Check balance for all files
     setIsCheckingBalance(true)
@@ -160,6 +165,7 @@ export function FileUpload() {
       })
     } finally {
       setIsCheckingBalance(false)
+      stopLoading('file-upload')
     }
   }, [address, publicClient, isSignedIn, files])
 
@@ -167,6 +173,8 @@ export function FileUpload() {
     if (!address || !walletClient) return
 
     try {
+      // Start individual file loading
+      startLoading(`file-upload-${index}`, `Uploading ${file.name}...`)
       // Update progress
       setUploadingFiles(prev => prev.map((f, i) => 
         i === index ? { ...f, progress: 10 } : f
@@ -261,6 +269,8 @@ export function FileUpload() {
         description: `Failed to upload ${file.name}`,
         variant: "destructive",
       })
+    } finally {
+      stopLoading(`file-upload-${index}`)
     }
   }
 

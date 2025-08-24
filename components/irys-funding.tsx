@@ -10,6 +10,7 @@ import { useAccount, usePublicClient, useWalletClient } from "wagmi"
 import { Wallet, RefreshCw, AlertCircle, CheckCircle, Loader2, DollarSign } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { useNexusStore } from "@/stores/use-nexus-store"
+import { useLoadingStore } from "@/stores/use-loading-store"
 import { getIrysClient, getIrysBalance, fundIrysWallet } from "@/lib/irys-client"
 
 export function IrysFunding() {
@@ -17,6 +18,7 @@ export function IrysFunding() {
   const publicClient = usePublicClient()
   const { data: walletClient } = useWalletClient()
   const { irysBalance, setIrysBalance } = useNexusStore()
+  const { startLoading, stopLoading } = useLoadingStore()
   
   const [fundAmount, setFundAmount] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -51,6 +53,7 @@ export function IrysFunding() {
       return
     }
 
+    startLoading('fund-wallet', `Funding ${fundAmount} ETH to Irys wallet...`)
     setIsLoading(true)
     try {
       const irys = await getIrysClient(walletClient, address)
@@ -84,12 +87,14 @@ export function IrysFunding() {
       })
     } finally {
       setIsLoading(false)
+      stopLoading('fund-wallet')
     }
   }
 
   const refreshBalance = async () => {
     if (!address || !walletClient) return
 
+    startLoading('refresh-balance', 'Refreshing balance...')
     setIsRefreshing(true)
     try {
       const irys = await getIrysClient(walletClient, address)
@@ -104,6 +109,7 @@ export function IrysFunding() {
       })
     } finally {
       setIsRefreshing(false)
+      stopLoading('refresh-balance')
     }
   }
 

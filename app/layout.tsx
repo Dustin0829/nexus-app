@@ -6,6 +6,10 @@ import { WalletProvider } from "@/components/wallet-provider"
 import { WalletSync } from "@/components/wallet-sync"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { Toaster } from "@/components/ui/toaster"
+import { GlobalLoading } from "@/components/global-loading"
+import { PageTransition } from "@/components/page-transition"
+import { Preloader } from "@/components/preloader"
+import { PerformanceMonitor } from "@/components/performance-monitor"
 import "./globals.css"
 
 const inter = Inter({ subsets: ["latin"] })
@@ -31,6 +35,10 @@ export default function RootLayout({
               {children}
             </ThemeProvider>
             <Toaster />
+            <GlobalLoading />
+            <PageTransition />
+            <Preloader />
+            <PerformanceMonitor />
           </WalletProvider>
         </ErrorBoundary>
       </body>

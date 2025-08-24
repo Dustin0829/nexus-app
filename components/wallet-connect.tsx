@@ -82,7 +82,13 @@ export function WalletConnect() {
   const [showWalletModal, setShowWalletModal] = useState(false)
   
   // Store state
-  const { setConnectedWallet, setWalletAddress, setWalletType } = useNexusStore()
+  const { setConnectedWallet, setWalletAddress, setWalletType, isWalletConnected } = useNexusStore()
+  const [mounted, setMounted] = useState(false)
+
+  // Prevent hydration mismatch
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Update store when wallet connects/disconnects
   useEffect(() => {
@@ -233,6 +239,17 @@ export function WalletConnect() {
   const getAvatarFallback = useCallback((address: string) => {
     return address.slice(2, 4).toUpperCase()
   }, [])
+
+  // Prevent hydration mismatch
+  if (!mounted) {
+    return (
+      <div className="space-y-4">
+        <div className="text-center">
+          <div className="w-full max-w-sm h-10 bg-muted animate-pulse rounded-md mx-auto"></div>
+        </div>
+      </div>
+    )
+  }
 
   // If not connected, show wallet selection
   if (!isConnected || !address) {
