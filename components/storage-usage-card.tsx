@@ -4,10 +4,12 @@ import Link from "next/link"
 import { useMemo } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { Button } from "@/components/ui/button"
+import { Button } from "./ui/button"
 import { useNexusStore } from "@/stores/use-nexus-store"
+import { useState } from "react"
+import { FundingModal } from "./funding-modal"
 
-const TEN_GB = 10 * 1024 * 1024 * 1024
+const TEN_GB = 10 * 1024 * 1024 * 1024 // 10GB in bytes
 
 function formatBytes(bytes: number) {
   if (bytes === 0) return "0B"
@@ -19,6 +21,7 @@ function formatBytes(bytes: number) {
 
 export function StorageUsageCard() {
   const { files } = useNexusStore()
+  const [showFundingModal, setShowFundingModal] = useState(false)
   const used = useMemo(() => files.reduce((s, f) => s + (f?.size || 0), 0), [files])
   const pct = Math.min(100, (used / TEN_GB) * 100)
 
@@ -35,9 +38,16 @@ export function StorageUsageCard() {
             <span>{formatBytes(used)}</span>
             <span>10GB</span>
           </div>
-          <Link href="/funding">
-            <Button className="w-full">Add Storage</Button>
-          </Link>
+          <Button 
+            className="w-full" 
+            onClick={() => setShowFundingModal(true)}
+          >
+            Add Storage
+          </Button>
+          <FundingModal 
+            open={showFundingModal} 
+            onOpenChange={setShowFundingModal} 
+          />
         </CardContent>
       </Card>
     </div>

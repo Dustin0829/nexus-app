@@ -38,7 +38,8 @@ interface NexusState {
   // File operations
   addFile: (file: NexusFile) => void
   setFiles: (files: NexusFile[]) => void
-  removeFile: (fileId: string) => void
+  removeFile: (fileId: string) => void,
+  updateFile: (fileId: string, updates: Partial<NexusFile>) => void,
   // Trash operations
   setTrash: (files: NexusFile[]) => void
   trashFile: (file: NexusFile) => void
@@ -94,6 +95,11 @@ export const useNexusStore = create<NexusState>((set) => ({
       files: state.files.filter(f => f.id !== fileId),
     }
   }),
+  updateFile: (fileId, updates) => set(state => ({
+    files: state.files.map(f =>
+      f.id === fileId ? { ...f, ...updates } : f
+    ),
+  })),
   // Trash operations
   setTrash: (files) => set({ trash: files }),
   trashFile: (file) => set((state) => ({

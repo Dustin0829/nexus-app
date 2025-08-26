@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Folder, Home, Wallet, Trash } from "lucide-react"
+import { Folder, Home, Trash } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { usePathname } from "next/navigation"
 import { StorageUsageCard } from "../storage-usage-card"
@@ -12,7 +12,6 @@ export function Sidebar() {
   const navItems = [
     { name: "Dashboard", href: "/", icon: Home },
     { name: "Files", href: "/files", icon: Folder },
-    { name: "Funding", href: "/funding", icon: Wallet },
     { name: "Trash", href: "/trash", icon: Trash },
   ]
 
