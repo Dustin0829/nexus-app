@@ -24,6 +24,8 @@ import {
 import { toast } from "@/components/ui/use-toast"
 import { useNexusStore } from "@/stores/use-nexus-store"
 import { useLoadingStore } from "@/stores/use-loading-store"
+import { DndContext, useDraggable, useDroppable } from '@dnd-kit/core';
+import { useFilesDnd } from '@/hooks/use-files-dnd';
 import { 
   getIrysClient, 
   getFileFromIrys, 
@@ -62,6 +64,7 @@ export function FileList() {
   const { data: walletClient } = useWalletClient()
   const { files, trashFile, setFiles, addFile } = useNexusStore()
   const { startLoading, stopLoading } = useLoadingStore()
+  const { sensors, handleDragEnd } = useFilesDnd();
   
   const [searchTerm, setSearchTerm] = useState("")
   const [filterType, setFilterType] = useState("all")
@@ -145,6 +148,40 @@ export function FileList() {
     })
   }
 
+  const DraggableFile = ({ file, children }: { file: any, children: React.ReactNode }) => {
+    const { attributes, listeners, setNodeRef, transform } = useDraggable({
+      id: file.id,
+    });
+
+    const style = transform ? {
+      transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+    } : {};
+
+    return (
+      <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
+        {children}
+      </div>
+    );
+  };
+
+  const DroppableFolder = ({ folder, children }: { folder: any, children: React.ReactNode }) => {
+    const { isOver, setNodeRef } = useDroppable({
+      id: folder.id,
+    });
+
+    const style = {
+      transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+      transform: isOver ? 'scale(1.03)' : 'scale(1)',
+      boxShadow: isOver ? '0 0 0 2px #3b82f6' : 'none',
+    };
+
+    return (
+      <div ref={setNodeRef} style={style}>
+        {children}
+      </div>
+    );
+  };
+
   // Helper: responsive title sizing based on length to keep inside card
   const getTitleClassesFor = (name: string) => {
     const len = (name || "").length
@@ -208,7 +245,7 @@ export function FileList() {
       toast({ title: "Download Failed", description: "File transaction ID not found", variant: "destructive" })
       return
     }
-    startLoading('download-file', `Downloading ${file.name}...`)
+    startLoading('download-file', `Downloading ${file.name}...`);
     setDownloadingFile(file.id)
     try {
       const response = await getFileFromIrys(file.transactionId)
@@ -300,7 +337,7 @@ export function FileList() {
       return
     }
 
-    startLoading('delete-file', `Deleting ${file.name}...`)
+    startLoading('delete-file', `Deleting ${file.name}...`);
     setDeletingFile(file.id)
     try {
       const irys = await getIrysClient(walletClient, address)
@@ -502,7 +539,6 @@ export function FileList() {
       return
     }
 
-    startLoading('file-upload', `Uploading ${acceptedFiles.length} file${acceptedFiles.length > 1 ? 's' : ''}...`)
     setIsCheckingBalance(true)
     try {
       const totalSize = acceptedFiles.reduce((sum, file) => sum + file.size, 0)
@@ -548,6 +584,8 @@ export function FileList() {
         await uploadFile(file, i + newUploadingFiles.length - acceptedFiles.length)
       }
 
+      setShowUploadDialog(false);
+
     } catch (error) {
       console.error("Error checking balance:", error)
       toast({
@@ -557,31 +595,22 @@ export function FileList() {
       })
     } finally {
       setIsCheckingBalance(false)
-      stopLoading('file-upload')
     }
   }
 
   const uploadFile = async (file: File, index: number) => {
-    if (!address || !walletClient) return
+    if (!address || !walletClient) return;
 
+    const loadingKey = `file-upload-${file.name}`;
     try {
-      startLoading(`file-upload-${index}`, `Uploading ${file.name}...`)
-      // Update progress
-      setUploadingFiles(prev => prev.map((f, i) => 
-        i === index ? { ...f, progress: 10 } : f
-      ))
+      startLoading(loadingKey, `${file.name} 0%`);
 
       // Encrypt file
-      const encryptedFile = await encryptFile(file)
-      setUploadingFiles(prev => prev.map((f, i) => 
-        i === index ? { ...f, progress: 30 } : f
-      ))
+      const encryptedFile = await encryptFile(file);
+      startLoading(loadingKey, `${file.name} 30%`);
 
       // Get Irys client
-      const irys = await getIrysClient(walletClient, address)
-      setUploadingFiles(prev => prev.map((f, i) => 
-        i === index ? { ...f, progress: 50 } : f
-      ))
+      const irys = await getIrysClient(walletClient, address);
 
       // Prepare metadata
       const metadata = {
@@ -592,19 +621,31 @@ export function FileList() {
         originalName: file.name,
         originalSize: file.size,
         encrypted: isPrivate,
-        uploadDate: new Date().toISOString()
-      }
+        uploadDate: new Date().toISOString(),
+      };
 
       // Parse tags
-      const parsedTags = uploadTags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0)
-      const tagObjects = parsedTags.map(tag => ({ name: "Tag", value: tag }))
-      tagObjects.push({ name: "Access", value: isPrivate ? "private" : "public" })
+      const parsedTags = uploadTags
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter((tag) => tag.length > 0);
+      const tagObjects = parsedTags.map((tag) => ({ name: "Tag", value: tag }));
+      tagObjects.push({ name: "Access", value: isPrivate ? "private" : "public" });
 
       // Upload
-      const receipt = await uploadToIrys(irys, encryptedFile, address, tagObjects, metadata)
-      setUploadingFiles(prev => prev.map((f, i) => 
-        i === index ? { ...f, progress: 90 } : f
-      ))
+      const receipt = await uploadToIrys(
+        irys,
+        encryptedFile,
+        address,
+        tagObjects,
+        metadata,
+        (progress) => {
+          const overallProgress = 30 + Math.floor(progress * 0.6);
+          startLoading(loadingKey, `${file.name} ${overallProgress}%`);
+        }
+      );
+
+      startLoading(loadingKey, `${file.name} 95%`);
 
       // Add to store
       const nexusFile = {
@@ -618,45 +659,26 @@ export function FileList() {
         encrypted: true,
         transactionId: receipt.id,
         url: `https://gateway.irys.xyz/${receipt.id}`,
-        parentFolder: selectedFolder ? selectedFolder.id : null
-      }
+        parentFolder: selectedFolder ? selectedFolder.id : null,
+      };
 
-      addFile(nexusFile)
-
-      // Mark as success
-      setUploadingFiles(prev => prev.map((f, i) => 
-        i === index ? { 
-          ...f, 
-          progress: 100, 
-          status: 'success',
-          transactionId: receipt.id
-        } : f
-      ))
+      addFile(nexusFile);
 
       toast({
         title: "✅ Upload Successful",
         description: `${file.name} has been uploaded to Irys permanently`,
-      })
-
+      });
     } catch (error) {
-      console.error("Error uploading file:", error)
-      setUploadingFiles(prev => prev.map((f, i) => 
-        i === index ? { 
-          ...f, 
-          status: 'error',
-          error: error instanceof Error ? error.message : "Upload failed"
-        } : f
-      ))
-
+      console.error("Error uploading file:", error);
       toast({
         title: "Upload Failed",
         description: `Failed to upload ${file.name}`,
         variant: "destructive",
-      })
+      });
     } finally {
-      stopLoading(`file-upload-${index}`)
+      stopLoading(loadingKey);
     }
-  }
+  };
 
   // Create folder functionality
   const createFolder = async () => {
@@ -669,7 +691,7 @@ export function FileList() {
       return
     }
 
-    startLoading('create-folder', `Creating folder "${folderName}"...`)
+    startLoading('create-folder', `Creating folder "${folderName}"...`);
 
     try {
       // Create a folder with parent folder reference
@@ -806,8 +828,8 @@ export function FileList() {
         </div>
       )}
 
-      {!isLoading && filteredFiles.length === 0 && (
-        <div className="text-center py-8">
+      {!isLoading && filteredFiles.length === 0 && filteredFolders.length === 0 && (
+        <div className="text-center py-8 col-span-1 md:col-span-2 lg:col-span-3">
           <Folder className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
           <h3 className="text-lg font-semibold mb-2">No Files Found</h3>
           <p className="text-sm text-muted-foreground">
@@ -816,175 +838,104 @@ export function FileList() {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {/* Show folders first */}
-        {filteredFolders.map((folder) => {
-          // Calculate folder stats: total size and item count
-          const folderFiles = files.filter(f => f.parentFolder === folder.id && f.type !== 'folder')
-          const totalBytes = folderFiles.reduce((acc, f) => acc + (Number(f.size) || 0), 0)
-          const totalMb = (totalBytes / 1024 / 1024).toFixed(2)
+      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {/* Show folders first */}
+          {filteredFolders.map((folder) => {
+            const folderFiles = files.filter(f => f.parentFolder === folder.id && f.type !== 'folder');
+            const totalBytes = folderFiles.reduce((acc, f) => acc + (Number(f.size) || 0), 0);
 
-          return (
-            <Card key={folder.id} className="group hover:shadow-md transition-shadow cursor-pointer" onClick={() => handleFolderClick(folder)}>
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Folder className="h-5 w-5 text-blue-500" />
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className={getTitleClassesFor(folder.name)}>
-                        {folder.name}
-                      </CardTitle>
-                      <CardDescription className="text-xs">
-                        {totalMb} MB • {new Date(folder.uploadedAt).toLocaleDateString()} • Storage: Irys
-                      </CardDescription>
+            return (
+              <DroppableFolder key={folder.id} folder={folder}>
+                <Card className="group hover:shadow-md transition-shadow cursor-pointer" onClick={() => handleFolderClick(folder)}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Folder className="h-5 w-5 text-blue-500" />
+                        <div className="flex-1 min-w-0">
+                          <CardTitle className={getTitleClassesFor(folder.name)}>
+                            {folder.name}
+                          </CardTitle>
+                          <CardDescription className="text-xs">
+                            {new Date(folder.uploadedAt).toLocaleDateString()} • Storage: Irys
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleShareFolder(folder)}>
+                          <Share2 className="h-3 w-3" />
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 hover:text-red-700" onClick={() => handleDeleteFolder(folder)}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{folderFiles.length} items</span>
+                      <span>{formatBytes(totalBytes)}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </DroppableFolder>
+            );
+          })}
+
+          {/* Then show files */}
+          {filteredFiles.map((file) => (
+            <DraggableFile key={file.id} file={file}>
+              <Card className="group hover:shadow-md transition-shadow">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center space-x-2">
+                      <FileIcon className="h-5 w-5 text-gray-500" />
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className={getTitleClassesFor(file.name)}>
+                          {file.name}
+                        </CardTitle>
+                        <CardDescription className="text-xs">
+                          {formatBytes(file.size)} • {new Date(file.uploadedAt).toLocaleDateString()} • Storage: Irys
+                        </CardDescription>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handlePreview(file)} disabled={!!previewFile}>
+                        <Eye className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleShare(file)}>
+                        <Share2 className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleDownload(file)} disabled={!!downloadingFile}>
+                         {downloadingFile === file.id ? (
+                           <div className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
+                         ) : (
+                           <Download className="h-3 w-3" />
+                         )}
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 hover:text-red-600" onClick={() => setPendingDeleteFile(file)} disabled={!!deletingFile}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0"
-                      onClick={() => handleShareFolder(folder)}
-                    >
-                      <Share2 className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
-                      onClick={() => handleDeleteFolder(folder)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              {/* compact body to keep folder card short */}
-              <CardContent className="pt-0 pb-3">
-                <div className="text-xs text-muted-foreground">
-                  {folderFiles.length} item{folderFiles.length === 1 ? '' : 's'}
-                </div>
-              </CardContent>
-            </Card>
-          )
-        })}
-
-        {filteredFolders.length > 0 && (
-          <div className="col-span-full" />
-        )}
-        
-        {/* Then show files */}
-        {filteredFiles.map((file) => (
-          <Card key={file.id} className="group hover:shadow-md transition-shadow cursor-pointer" onClick={() => handlePreview(file)}>
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center space-x-2">
-                  <FileIcon className="h-5 w-5 text-muted-foreground" />
-                  <div className="flex-1 min-w-0">
-                    <CardTitle className={getTitleClassesFor(file.name)}>
-                      {file.name}
-                    </CardTitle>
-                    <CardDescription className="text-xs">
-                      {(file.size / 1024 / 1024).toFixed(2)} MB
-                    </CardDescription>
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-1" />
-              </div>
-            </CardHeader>
-            
-            <CardContent className="pt-0">
-              {(isImageFile(file) || isVideoFile(file)) && (
-                <div className="mb-3 overflow-hidden rounded-md border">
-                  <AspectRatio ratio={16/9}>
-                    {thumbUrls[file.id] ? (
-                      <img src={thumbUrls[file.id]} alt={file.name} className="h-full w-full object-cover" />
+                </CardHeader>
+                <CardContent>
+                  <AspectRatio ratio={16 / 9} className="bg-muted rounded-md overflow-hidden">
+                    {(isImageFile(file) || isVideoFile(file)) && thumbUrls[file.id] ? (
+                      <img src={thumbUrls[file.id]} alt={file.name} className="object-cover w-full h-full" />
                     ) : (
-                      <div className="h-full w-full bg-muted animate-pulse" />
+                      <div className="flex items-center justify-center h-full">
+                        <FileIcon className="h-8 w-8 text-muted-foreground" />
+                      </div>
                     )}
                   </AspectRatio>
-                </div>
-              )}
-              {file.description && (
-                <p className="text-xs text-muted-foreground mb-3 line-clamp-2">
-                  {file.description}
-                </p>
-              )}
-              
-              {file.tags && file.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-3">
-                  {file.tags.slice(0, 3).map((tag: string, index: number) => (
-                    <Badge key={index} variant="outline" className="text-xs">
-                      {tag}
-                    </Badge>
-                  ))}
-                  {file.tags.length > 3 && (
-                    <Badge variant="outline" className="text-xs">
-                      +{file.tags.length - 3}
-                    </Badge>
-                  )}
-                </div>
-              )}
-              
-              <div className="flex items-center justify-between">
-                <div className="text-xs text-muted-foreground">
-                  {new Date(file.uploadedAt).toLocaleDateString()}
-                </div>
-                
-                <div className="flex items-center space-x-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => { e.stopPropagation(); handleDownload(file) }}
-                    disabled={downloadingFile === file.id}
-                    className="h-7 w-7 p-0"
-                  >
-                    {downloadingFile === file.id ? (
-                      <div className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
-                    ) : (
-                      <Download className="h-3 w-3" />
-                    )}
-                  </Button>
-                  
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => { e.stopPropagation(); handleShare(file) }}
-                    className="h-7 w-7 p-0"
-                  >
-                    <Share2 className="h-3 w-3" />
-                  </Button>
-                  
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => { e.stopPropagation(); handlePreview(file) }}
-                    className="h-7 w-7 p-0"
-                  >
-                    <Eye className="h-3 w-3" />
-                  </Button>
-
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => { e.stopPropagation(); setPendingDeleteFile(file) }}
-                    disabled={deletingFile === file.id}
-                    className="h-7 w-7 p-0 text-red-500 hover:text-red-700"
-                  >
-                    {deletingFile === file.id ? (
-                      <div className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
-                    ) : (
-                      <Trash2 className="h-3 w-3" />
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
+                </CardContent>
+              </Card>
+            </DraggableFile>
+          ))}
+        </div>
+      </DndContext>
+ 
       <Dialog open={!!previewUrl} onOpenChange={(o) => { if (!o && previewUrl) { URL.revokeObjectURL(previewUrl); setPreviewUrl(null); setPreviewType(""); setPreviewFile(null); } }}>
         <DialogPortal>
           <DialogOverlay />

@@ -22,7 +22,7 @@ export const getIrysClient = async (walletClient: any, address: string) => {
           try {
             return await base.request({ method, params })
           } catch (err: any) {
-            const code = err?.code ?? err?.error?.code
+            const code = err?.code ?? err?.error?.code  
             if (code === -32601) {
               try {
                 const hist = await base.request({ method: "eth_feeHistory", params: ["0x5", "latest", [90]] })
@@ -113,11 +113,12 @@ export const fundIrysWallet = async (irys: any, amount: string) => {
 
 // Upload file to Irys with programmable tags
 export const uploadToIrys = async (
-  irys: any, 
-  file: File, 
+  irys: any,
+  file: File,
   userAddress: string,
   tags: Array<{ name: string; value: string }> = [],
-  metadata: any = {}
+  metadata: any = {},
+  onProgress?: (progress: number) => void
 ) => {
   try {
     // Add default tags for file metadata and programmability
@@ -131,7 +132,7 @@ export const uploadToIrys = async (
       { name: "Storage-Type", value: "permanent" },
       { name: "Programmable", value: "true" },
       { name: "Datachain", value: "Irys" },
-      ...tags
+      ...tags,
     ]
 
     // Add metadata tags for future programmability
@@ -148,7 +149,18 @@ export const uploadToIrys = async (
       defaultTags.push({ name: "Royalties", value: metadata.royalties })
     }
 
-    const receipt = await irys.uploadFile(file, { tags: defaultTags })
+    // The uploader event emitter for progress tracking has been deprecated in the new SDK version.
+    // We will rely on the onProgress callback for start and end states.
+    if (onProgress) {
+      onProgress(50); // Set progress to 50% to indicate upload has started
+    }
+
+    const receipt = await irys.uploadFile(file, { tags: defaultTags });
+
+    if (onProgress) {
+      onProgress(100);
+    }
+
     return receipt
   } catch (error) {
     console.error("Error uploading to Irys:", error)

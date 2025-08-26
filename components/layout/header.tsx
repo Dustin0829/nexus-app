@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useAccount, useDisconnect, useChainId } from "wagmi"
+import { useRouter } from "next/navigation"
 import { LogOut, Copy, CheckCircle } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { useState, useCallback } from "react"
@@ -12,9 +13,24 @@ import { SignInModal } from "@/components/sign-in-modal"
 
 export function Header() {
   const { address, isConnected } = useAccount()
-  const { disconnect } = useDisconnect()
+  const { disconnect, disconnectAsync } = useDisconnect()
+  const router = useRouter()
   const chainId = useChainId()
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null)
+
+  const handleDisconnect = async () => {
+    try {
+      await disconnectAsync()
+      router.push('/')
+    } catch (error) {
+      console.error("Disconnect error:", error)
+      toast({
+        title: "Disconnect Failed",
+        description: "Could not disconnect wallet.",
+        variant: "destructive",
+      })
+    }
+  }
 
   const handleCopyAddress = useCallback(async () => {
     if (!address) return
@@ -123,7 +139,7 @@ export function Header() {
               variant="outline"
               size="sm"
               className="flex items-center gap-2"
-              onClick={() => disconnect()}
+              onClick={handleDisconnect}
             >
               <LogOut className="h-3 w-3" />
               Disconnect

@@ -3,6 +3,7 @@
 import { Sidebar } from "@/components/layout/sidebar"
 import { Header } from "@/components/layout/header"
 import { LazyFileList } from "@/components/lazy-components"
+import { LoadingIndicator } from "@/components/loading-indicator"
 
 // Disable SSR for this page
 export const dynamic = 'force-dynamic'
@@ -18,6 +19,7 @@ export default function FilesPage() {
           <LazyFileList />
         </main>
       </div>
+      <LoadingIndicator />
     </div>
   )
 }
